@@ -99,3 +99,38 @@ def test_ferramenta_nao_autorizada():
     )
 
     assert "erro" in resultado
+
+
+def test_selecao_numerica_consulta_produto(monkeypatch):
+
+    cliente = ClienteFalso([])
+    agente = AtendenteIA(client=cliente)
+
+    agente.ultima_lista = [
+        {
+            "product_id": 81,
+            "nome": "Yamaha C40 Nylon Natural"
+        }
+    ]
+
+    monkeypatch.setitem(
+        FERRAMENTAS,
+        "consultar_produto",
+        lambda produto_id: {
+            "nome": "Yamaha C40 Nylon Natural",
+            "preco_atual": "R$ 599,90",
+            "estoque": 12,
+            "disponivel": True,
+            "descricao": "Violão clássico para iniciantes.",
+            "especificacoes": {"strings": "nylon"},
+        },
+    )
+
+    texto = agente.responder("1")
+
+    assert "Yamaha C40" in texto
+    assert "599,90" in texto
+    assert "nylon" in texto.lower()
+
+    # A seleção funciona sem chamar o LLM
+    assert cliente.chamadas == []

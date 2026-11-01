@@ -80,3 +80,24 @@ def test_produto_descontinuado_com_estoque_indisponivel():
 
 def test_erro_sem_identificador():
     assert "erro" in consultar_produto()
+
+
+@pytest.mark.parametrize(
+    "filtros",
+    [
+        {"categoria": "voilões"},
+        {"termo": "voilões"},
+    ]
+)
+def test_busca_com_erro_de_digitacao(filtros):
+    resposta = buscar_produtos(
+        **filtros,
+        preco_maximo=1000,
+        limite=5
+    )
+
+    assert resposta["total_encontrados"] > 0
+    assert all(
+        produto["disponivel"]
+        for produto in resposta["produtos"]
+    )

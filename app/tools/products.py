@@ -5,6 +5,7 @@ import json
 import unicodedata
 from contextlib import closing
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from difflib import get_close_matches
 
 from app.database.connection import get_connection
 
@@ -149,19 +150,59 @@ def buscar_produtos(
         "teclado": "teclados",
     }
 
-    filtro_categoria = (
-        _normalizar(categoria) if categoria else None
-    )
+    
+    registros = _catalogo()
 
-    filtro_categoria = alias_categorias.get(
-        filtro_categoria, filtro_categoria
-    )
+    categorias_validas = {
+        _normalizar(r["categoria"])
+        for r in registros
+    }
 
+
+    def corrigir_categoria(valor):
+        if not valor:
+            return None
+
+        normalizado = _normalizar(valor)
+
+        normalizado = alias_categorias.get(
+            normalizado, normalizado
+        )
+
+        if normalizado in categorias_validas:
+            return normalizado
+
+        semelhantes = get_close_matches(
+            normalizado,
+            sorted(categorias_validas),
+            n=1,
+            cutoff=0.78,
+        )
+
+        return semelhantes[0] if semelhantes else normalizado
+
+
+    filtro_categoria = corrigir_categoria(categoria)
     filtro_termo = _normalizar(termo) if termo else None
+
+    # Reconhece categorias mesmo quando o modelo
+    # envia "voilões" como termo de pesquisa.
+    if filtro_termo:
+        categoria_sugerida = corrigir_categoria(filtro_termo)
+
+        if any(
+            categoria_sugerida in cat
+            for cat in categorias_validas
+        ) and (
+            filtro_categoria is None
+            or categoria_sugerida == filtro_categoria
+        ):
+            filtro_categoria = categoria_sugerida
+            filtro_termo = None
 
     encontrados = []
 
-    for registro in _catalogo():
+    for registro in registros:
         produto = _formatar_produto(registro)
 
         if apenas_disponiveis and not produto["disponivel"]:

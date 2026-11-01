@@ -135,7 +135,7 @@ def executar_ferramenta(nome: str, argumentos: dict) -> dict:
     try:
         if nome == "buscar_produtos":
             argumentos.setdefault("apenas_disponiveis", True)
-            argumentos.setdefault("limite", 10)
+            argumentos.setdefault("limite", 5)
 
         if nome == "consultar_politicas":
             argumentos.setdefault("limite", 3)
@@ -153,6 +153,8 @@ def executar_ferramenta(nome: str, argumentos: dict) -> dict:
             "erro": "Não foi possível realizar essa consulta."
         }
 
+    
+
 
 
 class AtendenteIA:
@@ -169,6 +171,7 @@ class AtendenteIA:
         )
 
         self.historico = []
+        self.ultima_lista = []
 
         self.client = client if client is not None else Client(
             host=os.getenv(
@@ -180,6 +183,7 @@ class AtendenteIA:
 
     def limpar_historico(self):
         self.historico.clear()
+        self.ultima_lista.clear()
 
     def _chamar_modelo(self, mensagens, ferramentas):
 
@@ -202,7 +206,7 @@ class AtendenteIA:
                 options={
                     "temperature": 0.2,
                     "num_ctx": 4096,
-                    "num_predict": 256,
+                    "num_predict": 384,
                 },
             )
 
@@ -249,6 +253,72 @@ class AtendenteIA:
             return "Envie uma pergunta para começarmos."
 
         mensagem = mensagem.strip()
+
+        
+        # Seleção direta de um produto da última lista
+        if mensagem.isdecimal() and self.ultima_lista:
+
+            indice = int(mensagem) - 1
+
+            if not 0 <= indice < len(self.ultima_lista):
+                return (
+                    f"Escolha um número entre 1 e "
+                    f"{len(self.ultima_lista)}."
+                )
+
+            item = self.ultima_lista[indice]
+
+            print("[Ferramenta] consultar_produto")
+
+            produto = executar_ferramenta(
+                "consultar_produto",
+                {"produto_id": item["product_id"]}
+            )
+
+            if "erro" in produto:
+                return (
+                    "Não consegui consultar esse instrumento. "
+                    "Pode tentar novamente?"
+                )
+
+            linhas = [
+                f"**{produto['nome']}**",
+                f"Preço: {produto['preco_atual']}",
+                (
+                    f"Estoque: {produto['estoque']} unidades"
+                    if produto["disponivel"]
+                    else "Atualmente indisponível"
+                ),
+            ]
+
+            if produto.get("descricao"):
+                linhas.append(
+                    f"\n{produto['descricao']}"
+                )
+
+            especificacoes = produto.get(
+                "especificacoes", {}
+            )
+
+            if isinstance(especificacoes, dict) and especificacoes:
+                linhas.append("\nEspecificações:")
+
+                for chave, valor in list(
+                    especificacoes.items()
+                )[:5]:
+                    linhas.append(
+                        f"- {chave.replace('_', ' ').title()}: {valor}"
+                    )
+
+            linhas.append(
+                "\nPosso ajudar com mais alguma informação?"
+            )
+
+            return self._finalizar(
+                mensagem,
+                "\n".join(linhas)
+            )
+
 
         mensagens = [
             {
@@ -301,10 +371,34 @@ class AtendenteIA:
                         flush=True
                     )
 
+                    if nome == "buscar_produtos":
+                        print(
+                            f"[DEBUG] Filtros recebidos: {argumentos}",
+                            flush=True
+                        )
+
                     resultado = executar_ferramenta(
                         nome,
                         argumentos,
                     )
+
+                    if nome == "buscar_produtos":
+                        print(
+                            "[DEBUG] Total encontrado:",
+                            resultado.get("total_encontrados", "ERRO")
+                        )
+
+                        print(
+                            "[DEBUG] Produtos retornados:",
+                            len(resultado.get("produtos", []))
+                        )
+
+                    if nome == "buscar_produtos":
+                        self.ultima_lista = (
+                            resultado.get("produtos", [])
+                            if isinstance(resultado, dict)
+                            else []
+                        )
 
                     mensagens.append({
                         "role": "tool",
