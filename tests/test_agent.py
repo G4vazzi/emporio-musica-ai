@@ -2,6 +2,7 @@
 """Testes do agente Ollama sem consumir recursos do modelo."""
 
 from types import SimpleNamespace
+from app.agent import ajustar_filtros_produtos
 
 from app.agent import (
     AtendenteIA,
@@ -43,6 +44,7 @@ def test_resposta_sem_ferramentas():
     assert cliente.chamadas[0]["model"] == agente.modelo
 
 
+
 def test_function_calling(monkeypatch):
 
     monkeypatch.setitem(
@@ -52,8 +54,10 @@ def test_function_calling(monkeypatch):
             "total_encontrados": 1,
             "produtos": [
                 {
+                    "product_id": 1,
                     "nome": "Violão de teste",
                     "preco_atual": "R$ 500,00",
+                    "estoque": 3,
                 }
             ],
         },
@@ -70,10 +74,7 @@ def test_function_calling(monkeypatch):
     )
 
     cliente = ClienteFalso([
-        resposta_falsa(ferramentas=[chamada]),
-        resposta_falsa(
-            "Temos um violão por R$ 500,00."
-        ),
+        resposta_falsa(ferramentas=[chamada])
     ])
 
     agente = AtendenteIA(client=cliente)
@@ -82,14 +83,11 @@ def test_function_calling(monkeypatch):
         "Tem violões até mil reais?"
     )
 
-    assert "500,00" in resultado
-    assert len(cliente.chamadas) == 2
+    assert "Violão de teste" in resultado
+    assert "R$ 500,00" in resultado
+    assert len(cliente.chamadas) == 1
+    assert len(agente.ultima_lista) == 1
 
-    mensagens = cliente.chamadas[1]["messages"]
-
-    assert mensagens[-1]["role"] == "tool"
-    assert mensagens[-1]["tool_name"] == "buscar_produtos"
-    assert "Violão de teste" in mensagens[-1]["content"]
 
 
 def test_ferramenta_nao_autorizada():
@@ -134,3 +132,38 @@ def test_selecao_numerica_consulta_produto(monkeypatch):
 
     # A seleção funciona sem chamar o LLM
     assert cliente.chamadas == []
+
+
+def test_corrigir_categoria_gerada_pelo_modelo():
+
+    argumentos = {
+        "categoria": "viola",
+        "preco_maximo": 1000,
+        "limite": 5,
+    }
+
+    resultado = ajustar_filtros_produtos(
+        "Quais violões vocês têm disponíveis por até R$ 1.000?",
+        argumentos
+    )
+
+    assert resultado["categoria"] == "violões"
+    assert resultado["preco_maximo"] == 1000
+
+    # A função não modifica os argumentos originais
+    assert argumentos["categoria"] == "viola"
+
+
+def test_nao_confundir_viola_com_violao():
+
+    argumentos = {
+        "categoria": "viola",
+        "preco_maximo": 1000,
+    }
+
+    resultado = ajustar_filtros_produtos(
+        "Vocês vendem viola?",
+        argumentos
+    )
+
+    assert resultado["categoria"] == "viola"

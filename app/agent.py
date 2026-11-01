@@ -5,6 +5,8 @@ import json
 import os
 import sqlite3
 import time
+import re
+import unicodedata
 from pathlib import Path
 
 
@@ -121,8 +123,9 @@ DEFINICOES_FERRAMENTAS = [
 ]
 
 
+
 def executar_ferramenta(nome: str, argumentos: dict) -> dict:
-    """Executa apenas funções permitidas."""
+    """Executa apenas ferramentas autorizadas."""
 
     funcao = FERRAMENTAS.get(nome)
 
@@ -132,15 +135,19 @@ def executar_ferramenta(nome: str, argumentos: dict) -> dict:
     if not isinstance(argumentos, dict):
         return {"erro": "Argumentos inválidos."}
 
+    # Cria uma cópia para não modificar os argumentos originais
+    parametros = argumentos.copy()
+
+    if nome == "buscar_produtos":
+        parametros["apenas_disponiveis"] = True
+        parametros["limite"] = 5
+
+    elif nome == "consultar_politicas":
+        parametros.setdefault("limite", 3)
+
     try:
-        if nome == "buscar_produtos":
-            argumentos.setdefault("apenas_disponiveis", True)
-            argumentos.setdefault("limite", 5)
-
-        if nome == "consultar_politicas":
-            argumentos.setdefault("limite", 3)
-
-        return funcao(**argumentos)
+        resultado = funcao(**parametros)
+        return resultado
 
     except (
         TypeError,
@@ -148,13 +155,114 @@ def executar_ferramenta(nome: str, argumentos: dict) -> dict:
         FileNotFoundError,
         OverflowError,
         sqlite3.Error,
-    ):
+    ) as erro:
+
+        # Diagnóstico temporário durante o desenvolvimento
+        print(
+            f"[ERRO] Ferramenta {nome}: "
+            f"{type(erro).__name__}: {erro}"
+        )
+
         return {
             "erro": "Não foi possível realizar essa consulta."
         }
 
-    
 
+    
+def formatar_lista_produtos(resultado: dict) -> str:
+    """Monta uma resposta a partir dos dados reais do SQLite."""
+
+    if "erro" in resultado:
+        return (
+            "Não consegui consultar o catálogo agora. "
+            "Pode tentar novamente?"
+        )
+
+    produtos = resultado.get("produtos", [])
+    total = resultado.get("total_encontrados", 0)
+
+    if not produtos:
+        return (
+            "Não encontrei instrumentos disponíveis "
+            "com esses critérios. Quer tentar outra "
+            "categoria ou faixa de preço?"
+        )
+
+    linhas = [
+        f"Encontrei {total} opção(ões) no catálogo. "
+        f"Veja estas {len(produtos)}:",
+        "",
+    ]
+
+    for indice, produto in enumerate(produtos, start=1):
+        linhas.append(
+            f"**{indice}. {produto['nome']}**"
+        )
+        linhas.append(
+            f"Preço: {produto['preco_atual']}"
+        )
+        linhas.append(
+            f"Estoque: {produto['estoque']} unidades"
+        )
+        linhas.append("")
+
+    linhas.append(
+        "Digite o número de um instrumento para "
+        "ver seus detalhes."
+    )
+
+    return "\n".join(linhas)
+
+
+def ajustar_filtros_produtos(pergunta: str, argumentos: dict) -> dict:
+    """
+    Corrige divergências entre a pergunta do cliente
+    e os filtros gerados pelo modelo de IA.
+    """
+
+    if not isinstance(argumentos, dict):
+        return argumentos
+
+    parametros = argumentos.copy()
+
+    def normalizar(texto):
+        texto = unicodedata.normalize(
+            "NFKD", texto.casefold()
+        )
+
+        return "".join(
+            c for c in texto
+            if not unicodedata.combining(c)
+        )
+
+    pergunta_normalizada = normalizar(pergunta)
+
+    # Se o cliente pediu violões, não permitir
+    # que o modelo substitua a categoria por viola.
+    if re.search(
+        r"\b(?:violao|violoes|voilao|voiloes)\b",
+        pergunta_normalizada
+    ):
+        parametros["categoria"] = "violões"
+
+        termo = parametros.get("termo")
+
+        if isinstance(termo, str):
+            termo_normalizado = normalizar(termo).strip()
+
+            termos_genericos = {
+                "viola",
+                "violas",
+                "violao",
+                "violoes",
+                "voilao",
+                "voiloes",
+            }
+
+            if termo_normalizado in termos_genericos:
+                parametros["termo"] = None
+
+    return parametros
 
 
 class AtendenteIA:
@@ -355,60 +463,70 @@ class AtendenteIA:
 
                 mensagens.append(resposta.message)
 
+                
+                # Registra a resposta que solicitou ferramentas
+                mensagens.append(resposta.message)
+
                 for chamada in chamadas:
 
                     nome = chamada.function.name
                     argumentos = chamada.function.arguments
 
+                    # Converte argumentos JSON em dicionário
                     if isinstance(argumentos, str):
                         try:
                             argumentos = json.loads(argumentos)
                         except json.JSONDecodeError:
                             argumentos = {}
 
+                    if not isinstance(argumentos, dict):
+                        argumentos = {}
+
+                    # Valida os filtros de produtos
+                    if nome == "buscar_produtos":
+                        argumentos = ajustar_filtros_produtos(
+                            mensagem,
+                            argumentos
+                        )
+
                     print(
                         f"[Ferramenta] {nome}",
                         flush=True
                     )
 
-                    if nome == "buscar_produtos":
-                        print(
-                            f"[DEBUG] Filtros recebidos: {argumentos}",
-                            flush=True
-                        )
-
+                    # Executa a ferramenta ANTES de usar resultado
                     resultado = executar_ferramenta(
                         nome,
-                        argumentos,
+                        argumentos
                     )
 
-                    if nome == "buscar_produtos":
-                        print(
-                            "[DEBUG] Total encontrado:",
-                            resultado.get("total_encontrados", "ERRO")
+                    # Busca simples: resposta direta pelo Python
+                    if (
+                        nome == "buscar_produtos"
+                        and isinstance(resultado, dict)
+                    ):
+
+                        self.ultima_lista = resultado.get(
+                            "produtos", []
                         )
 
-                        print(
-                            "[DEBUG] Produtos retornados:",
-                            len(resultado.get("produtos", []))
-                        )
+                        if len(chamadas) == 1:
+                            return self._finalizar(
+                                mensagem,
+                                formatar_lista_produtos(resultado)
+                            )
 
-                    if nome == "buscar_produtos":
-                        self.ultima_lista = (
-                            resultado.get("produtos", [])
-                            if isinstance(resultado, dict)
-                            else []
-                        )
-
+                    # Outras consultas: envia o resultado ao LLM
                     mensagens.append({
                         "role": "tool",
                         "tool_name": nome,
                         "content": json.dumps(
                             resultado,
                             ensure_ascii=False,
-                            default=str,
+                            default=str
                         ),
                     })
+
 
             print(
                 "[Agente] Limite de ferramentas atingido."
