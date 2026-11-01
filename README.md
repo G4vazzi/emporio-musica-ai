@@ -1,324 +1,309 @@
-
 # 🎸 Empório da Música AI
 
-Assistente virtual de atendimento desenvolvido em Python para o desafio técnico de **AI Engineer da Artefact**.
+**Assistente virtual de atendimento para uma loja fictícia de instrumentos musicais**, desenvolvido em Python como solução para o desafio técnico de **AI Engineer da Artefact**.
 
-O projeto simula o atendimento de uma loja de instrumentos musicais, permitindo consultar produtos, preços, disponibilidade, pedidos e políticas comerciais por meio de linguagem natural.
+O agente conversa em português, identifica quando precisa consultar dados da operação e quando precisa buscar regras do manual da loja. A aplicação utiliza um modelo de linguagem executado localmente com **Ollama**, ferramentas Python, um banco **SQLite** e uma interface web em **Streamlit**.
 
-A solução utiliza um modelo de linguagem local, integrado a ferramentas Python e a uma base de dados SQLite.
+> **Escopo:** protótipo demonstrativo com dados fornecidos para o desafio. Preços, estoque, pedidos e rastreamentos são informações de uma base estática, não de sistemas comerciais em tempo real.
 
 ## Funcionalidades
 
-- Atendimento conversacional em português brasileiro.
-- Pesquisa de instrumentos por nome, categoria e orçamento.
-- Consulta de preços, estoque e especificações.
-- Aplicação de descontos e promoções registrados na base.
-- Seleção de instrumentos por número.
-- Consulta de pedidos históricos por número e e-mail.
-- Recuperação de informações do manual de políticas em PDF.
-- Tratamento de perguntas fora do escopo e informações ausentes.
-- Interface web com Streamlit.
-- Testes automatizados com Pytest.
-
-As consultas aos dados operacionais são realizadas sobre uma base local fornecida para o desafio. Não existe integração com um sistema de gestão ou transportadora em tempo real.
-
-## Tecnologias
-
-| Tecnologia | Utilização |
-|---|---|
-| Python 3.12 | Linguagem principal |
-| Ollama | Execução local do LLM |
-| Qwen 2.5 3B | Interpretação de mensagens e seleção de ferramentas |
-| SQLite | Armazenamento dos dados estruturados |
-| PyMuPDF | Extração de informações do PDF |
-| Streamlit | Interface web |
-| Pytest | Testes automatizados |
-| python-dotenv | Configurações de ambiente |
+- **Catálogo:** pesquisa por nome, categoria, disponibilidade e faixa de preço.
+- **Detalhes de produtos:** descrição, especificações, preço e estoque registrados.
+- **Promoções:** aplicação das condições de desconto registradas na base de dados.
+- **Consulta de pedidos:** busca por número do pedido e e-mail cadastrado, com status e informações históricas.
+- **Políticas da loja:** recuperação de trechos do manual em PDF para dúvidas sobre trocas, devoluções, pagamentos e funcionamento.
+- **Conversa contextual:** mantém o histórico da sessão e permite selecionar um produto de uma lista pelo número.
+- **Respostas responsáveis:** procura não inventar dados nem apresentar uma política não documentada como regra confirmada.
+- **Duas interfaces:** chat web com Streamlit e atendimento via terminal.
 
 ## Arquitetura
 
-O agente utiliza uma abordagem híbrida baseada em **Function Calling e recuperação lexical de documentos**.
-
-O fluxo principal é:
-
-1. O cliente envia uma mensagem pelo Streamlit ou terminal.
-2. O modelo Qwen interpreta a solicitação.
-3. Quando necessário, o modelo seleciona uma ferramenta Python.
-4. A ferramenta consulta o SQLite ou recupera seções do PDF.
-5. O resultado é utilizado para construir a resposta.
-6. O cliente recebe as informações na interface.
+A solução adota uma **arquitetura híbrida de Function Calling e recuperação lexical de documentos**.
 
 ```text
-Cliente
-   |
-   v
-Streamlit / CLI
-   |
-   v
-AtendenteIA
-   |
-   v
-Qwen 2.5 3B (Ollama)
-   |
-   +---- buscar_produtos ------> SQLite
-   |
-   +---- consultar_produto ----> SQLite
-   |
-   +---- consultar_pedido -----> SQLite
-   |
-   +---- consultar_politicas --> Manual PDF
-   |
-   v
-Resposta ao cliente
+                         ┌──────────────────────┐
+                         │      Cliente         │
+                         └──────────┬───────────┘
+                                    │
+                         ┌──────────▼───────────┐
+                         │  Streamlit ou CLI    │
+                         └──────────┬───────────┘
+                                    │
+                         ┌──────────▼───────────┐
+                         │     AtendenteIA      │
+                         │  Histórico + Prompt  │
+                         └──────────┬───────────┘
+                                    │
+                         ┌──────────▼───────────┐
+                         │  Qwen 2.5 3B /       │
+                         │       Ollama         │
+                         └──────────┬───────────┘
+                                    │
+                         Seleção de ferramenta
+                                    │
+               ┌────────────────────┼────────────────────┐
+               │                    │                    │
+        ┌──────▼───────┐     ┌──────▼───────┐    ┌──────▼──────────┐
+        │  Produtos e  │     │   Pedidos    │    │    Políticas    │
+        │  promoções   │     │              │    │                 │
+        │    SQLite    │     │    SQLite    │    │ PDF / PyMuPDF   │
+        └──────┬───────┘     └──────┬───────┘    └──────┬──────────┘
+               └────────────────────┼───────────────────┘
+                                    │
+                         ┌──────────▼───────────┐
+                         │  Resposta ao cliente │
+                         └──────────────────────┘
 ```
 
-### Ferramentas do agente
+### Ferramentas disponíveis
 
-| Função | Responsabilidade |
+| Ferramenta | Objetivo | Fonte |
+|---|---|---|
+| `buscar_produtos` | Pesquisar instrumentos e filtrar resultados | SQLite |
+| `consultar_produto` | Obter detalhes de um instrumento | SQLite |
+| `consultar_pedido` | Consultar o registro histórico de um pedido | SQLite |
+| `consultar_politicas` | Localizar seções pertinentes do manual | PDF |
+
+O modelo **não executa SQL livremente**. Ele escolhe entre ferramentas previamente registradas; as consultas e os filtros são implementados em Python.
+
+## Decisões técnicas
+
+### Modelo de linguagem: Ollama + Qwen 2.5 3B
+
+Foi escolhido um modelo local para evitar custos de inferência por requisição e permitir a execução do protótipo sem depender de uma API comercial. O Qwen 2.5 3B realiza a interpretação da mensagem e a seleção das ferramentas.
+
+Essa escolha envolve um compromisso: modelos menores podem confundir categorias ou argumentos e apresentar latência elevada em máquinas sem GPU dedicada. Por isso, o código valida filtros de produtos e utiliza respostas formatadas diretamente em Python quando possível.
+
+### Function Calling em vez de respostas baseadas apenas no prompt
+
+Dados como preços, estoque, promoções e pedidos não são confiados à memória do modelo. Quando necessário, o agente invoca funções Python que consultam a base estruturada.
+
+Nas pesquisas simples de produtos, o Python formata a lista retornada, evitando uma segunda inferência do modelo. Isso reduz o tempo de resposta e preserva os valores encontrados.
+
+### SQLite para dados estruturados
+
+As seis tabelas CSV disponibilizadas são importadas para um banco relacional local. O SQLite permite relacionar clientes, pedidos, itens, produtos, categorias e promoções sem exigir um servidor separado.
+
+Os valores monetários são tratados em **centavos inteiros** na base, reduzindo problemas de precisão típicos de operações com ponto flutuante.
+
+### Recuperação lexical do manual
+
+O manual em PDF é processado com **PyMuPDF**. As seções são identificadas e classificadas conforme a correspondência entre os termos da pergunta e o conteúdo, com normalização de palavras e sinônimos.
+
+Não há embeddings ou banco vetorial nesta versão. Para um manual pequeno e organizado em seções, essa abordagem é simples e tem baixo custo de execução; em contrapartida, pode ter dificuldade com perguntas ambíguas ou formuladas com vocabulário muito diferente do documento.
+
+### Prompt, histórico e tratamento de incertezas
+
+O prompt de sistema orienta o agente a manter um tom de atendimento adequado à loja, utilizar as fontes disponíveis e evitar informações não confirmadas. O histórico é mantido em memória durante a sessão, com um limite configurável de mensagens.
+
+Quando uma regra não está disponível ou existe ambiguidade documental, o comportamento esperado é informar a limitação e orientar o cliente a confirmar com a equipe da loja.
+
+## Tecnologias
+
+| Tecnologia | Aplicação |
 |---|---|
-| `buscar_produtos()` | Pesquisa instrumentos por filtros |
-| `consultar_produto()` | Recupera detalhes de um instrumento |
-| `consultar_pedido()` | Consulta dados históricos de um pedido |
-| `consultar_politicas()` | Recupera trechos relevantes do manual |
+| Python 3.12 | Linguagem principal |
+| Ollama | Execução local do modelo |
+| Qwen 2.5 3B | LLM com suporte a chamadas de ferramentas |
+| SQLite | Dados de produtos, clientes e pedidos |
+| PyMuPDF | Leitura e segmentação do manual PDF |
+| Streamlit | Interface de chat no navegador |
+| python-dotenv | Configurações locais |
+| Pytest | Testes automatizados |
 
-As ferramentas são registradas explicitamente no agente. O modelo não recebe permissão para executar comandos arbitrários no banco de dados.
+## Estrutura do projeto
 
-### Respostas determinísticas
+```text
+emporio-musica-ai/
+├── .streamlit/
+│   └── config.toml
+├── app/
+│   ├── agent.py                  # Orquestração do agente e ferramentas
+│   ├── prompts.py                # Instruções do atendente
+│   ├── main.py                   # Chat via terminal
+│   ├── database/
+│   │   ├── connection.py         # Conexão SQLite
+│   │   └── import_data.py        # Criação e importação das tabelas
+│   ├── services/
+│   │   └── retrieval.py          # Recuperação de seções do PDF
+│   └── tools/
+│       ├── products.py           # Catálogo e detalhes dos produtos
+│       ├── orders.py             # Consulta de pedidos
+│       └── policies.py           # Consulta das políticas
+├── data/
+│   ├── categories.csv
+│   ├── customers.csv
+│   ├── products.csv
+│   ├── orders.csv
+│   ├── order_items.csv
+│   ├── promotions.csv
+│   └── politicas_da_loja.pdf
+├── tests/                         # Testes com Pytest
+├── examples/                      # Conversas reais de demonstração
+├── streamlit_app.py               # Interface web
+├── requirements.txt
+├── .env.example
+└── README.md
+```
 
-As buscas simples de produtos são formatadas diretamente pelo Python, depois que o modelo seleciona a ferramenta.
+O arquivo `data/emporio_musica.db` é criado localmente na etapa de importação e não precisa ser versionado.
 
-Essa decisão reduz o número de inferências, evita alterações indevidas nos preços apresentados e melhora o desempenho em computadores com recursos limitados.
+## Instalação e execução
 
-O projeto também valida determinados argumentos produzidos pelo modelo. Por exemplo, evita confundir a categoria "violões" com "viola" quando a solicitação original é clara.
+### Pré-requisitos
 
-## Pré-requisitos
+- **Python 3.12** instalado.
+- **Ollama** instalado e em execução.
+- Terminal PowerShell, Bash ou equivalente.
+- Acesso aos CSVs e ao PDF incluídos em `data/`.
 
-- Python 3.12
-- Ollama instalado
-- Modelo `qwen2.5:3b` disponível localmente
-- Memória suficiente para executar o modelo
-- Git, caso deseje clonar o repositório
+### 1. Baixar e configurar o Ollama
 
-O uso de GPU é opcional. O modelo também funciona em CPU, mas as respostas podem ser mais lentas.
+Instale o Ollama: <https://ollama.com/download>
 
-## Instalação
+Baixe o modelo utilizado:
 
-### 1. Instalar o Ollama
-
-Baixe o instalador para seu sistema operacional:
-
-https://ollama.com/download
-
-Depois de instalar, execute:
-
-```powershell
+```bash
 ollama pull qwen2.5:3b
 ```
 
-Confirme a instalação:
+Confira se o modelo está disponível:
 
-```powershell
+```bash
 ollama list
 ```
 
-O serviço Ollama deve estar em execução durante o atendimento.
+O serviço Ollama precisa estar em execução para o agente responder.
 
-### 2. Criar o ambiente virtual
+### 2. Preparar o ambiente Python
 
-Na raiz do projeto:
+Na raiz do projeto, crie um ambiente virtual:
 
-```powershell
+```bash
 python -m venv .venv
 ```
 
-No PowerShell do Windows:
+Ative-o no **Windows (PowerShell)**:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-### 3. Instalar dependências
+Ou no **Linux/macOS**:
 
-```powershell
+```bash
+source .venv/bin/activate
+```
+
+Instale as dependências:
+
+```bash
 python -m pip install -r requirements.txt
 ```
 
-### 4. Configurar variáveis de ambiente
+### 3. Configurar as variáveis de ambiente
 
-Crie um arquivo `.env` com base em `.env.example`.
-
-Configuração utilizada:
+Copie `.env.example` para `.env` e confira os parâmetros:
 
 ```dotenv
 LLM_PROVIDER=ollama
 OLLAMA_HOST=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen2.5:3b
-
 DATABASE_PATH=data/emporio_musica.db
 POLICIES_PATH=data/politicas_da_loja.pdf
-
 MAX_HISTORY_MESSAGES=12
 ```
 
-Não é necessário possuir uma chave da API OpenAI.
+O arquivo `.env` contém configurações locais e não deve ser enviado ao repositório.
 
-### 5. Inicializar o banco de dados
+### 4. Criar o banco de dados
 
-O banco SQLite é criado a partir dos seis arquivos CSV fornecidos no desafio.
+Com o terminal aberto na raiz do projeto:
 
-Execute:
-
-```powershell
+```bash
 python -m app.database.import_data
 ```
 
-A base inicial possui:
+O comando cria as tabelas do SQLite e importa os seis CSVs:
 
-| Tabela | Registros |
+| Tabela | Registros de exemplo |
 |---|---:|
-| Categorias | 9 |
-| Clientes | 50 |
-| Produtos | 65 |
-| Pedidos | 20 |
-| Itens de pedidos | 22 |
-| Promoções | 25 |
+| `categories` | 9 |
+| `customers` | 50 |
+| `products` | 65 |
+| `orders` | 20 |
+| `order_items` | 22 |
+| `promotions` | 25 |
 
-**Atenção:** o importador recria os registros dessas tabelas a partir dos CSVs. Alterações manuais no banco podem ser perdidas ao executar novamente o script.
+> **Atenção:** repetir a importação recria os registros a partir dos CSVs. Alterações locais feitas diretamente nessas tabelas podem ser perdidas.
 
-## Executando o projeto
+### 5. Iniciar o atendimento
 
-### Interface web
+**Interface web (recomendada):**
 
-```powershell
+```bash
 python -m streamlit run streamlit_app.py
 ```
 
-A aplicação estará disponível normalmente em:
+Acesse <http://localhost:8501> no navegador. A interface possui histórico da sessão, perguntas sugeridas, opção de iniciar uma conversa e exportação do atendimento em Markdown.
 
-http://localhost:8501
+**Interface de terminal:**
 
-### Interface de terminal
-
-```powershell
+```bash
 python -m app.main
 ```
 
-Comandos disponíveis:
-
-- `/sair`: encerra a aplicação de terminal.
-- `/limpar`: limpa o histórico da conversa.
-
-## Testes automatizados
-
-Para executar todos os testes:
-
-```powershell
-python -m pytest tests/ -v
-```
-
-Os testes verificam consultas aos produtos, regras de disponibilidade, promoções, pedidos, recuperação documental e orquestração de ferramentas.
-
-Os testes do agente utilizam um cliente Ollama simulado, evitando consumo de recursos de inferência e permitindo a validação isolada do fluxo de Function Calling.
-
-Os testes automatizados não substituem a avaliação de respostas produzidas pelo modelo real.
-
-## Decisões técnicas
-
-### Por que Ollama e Qwen 2.5 3B?
-
-O desafio permite modelos locais ou via API.
-
-Escolhi o Ollama para executar um LLM sem custos por requisição e reduzir a dependência de serviços externos.
-
-O Qwen 2.5 3B foi selecionado pelo equilíbrio entre tamanho, capacidade de compreender português e suporte a chamadas de ferramentas.
-
-A limitação principal é o desempenho em CPU e a menor confiabilidade do modelo em comparação com modelos maiores.
-
-### Por que SQLite?
-
-Os dados fornecidos são estruturados, possuem identificadores relacionais e representam um volume pequeno.
-
-SQLite permite consultas SQL, integridade referencial e execução local sem a necessidade de configurar um servidor de banco de dados.
-
-### Por que recuperação lexical em vez de banco vetorial?
-
-O manual de políticas possui oito páginas e está organizado em seções numeradas.
-
-Por esse motivo, optei por extrair o texto usando PyMuPDF, separar as seções e classificá-las por correspondência de termos e sinônimos.
-
-Essa estratégia é mais simples e econômica para o volume de documentos disponibilizado.
-
-Não foram utilizados embeddings ou banco vetorial. O mecanismo apresenta limitações para consultas ambíguas e perguntas semanticamente distantes da redação do manual.
-
-### Estratégia de prompt
-
-O prompt de sistema define a identidade da loja, o tom de atendimento e as regras de utilização das ferramentas.
-
-O agente é orientado a consultar dados antes de informar preços, estoque, condições comerciais e status de pedidos.
-
-A ausência de informações deve ser informada com transparência, sem inventar políticas ou resultados.
-
-### Histórico de conversa
-
-O agente mantém um histórico limitado em memória. Na interface Streamlit, cada sessão possui seu próprio estado de conversação.
-
-O histórico não é salvo de forma persistente em um banco de dados.
-
-## Segurança e privacidade
-
-O protótipo utiliza apenas ferramentas de consulta e não permite modificar pedidos, excluir registros ou efetuar compras.
-
-As consultas de pedidos utilizam parâmetros SQL, evitando a concatenação direta de valores fornecidos pelo cliente.
-
-Para consultar um pedido, é necessário informar o número e o e-mail cadastrado.
-
-Entretanto, **essa conferência não representa autenticação forte**. Uma implementação real precisaria de verificação de identidade, por exemplo, usando um código temporário enviado ao titular.
-
-O projeto utiliza dados fictícios disponibilizados para o desafio e não deve ser utilizado diretamente em produção.
-
-## Limitações conhecidas
-
-- O Ollama e o modelo precisam estar instalados na máquina de execução.
-- A inferência local em CPU pode apresentar latência elevada.
-- O modelo pode interpretar incorretamente a intenção ou os argumentos de uma ferramenta.
-- A recuperação lexical não garante correspondência semântica perfeita.
-- Os CSVs representam uma base estática, sem atualização em tempo real.
-- Pedidos e rastreamentos são dados históricos.
-- O histórico não persiste após o encerramento da sessão.
-- A verificação por número e e-mail não é autenticação suficiente para produção.
-- Não existem integrações reais com WhatsApp, pagamentos, Correios ou sistemas de gestão.
-
-## Melhorias futuras
-
-Com mais tempo, as principais evoluções seriam:
-
-- Implementação de autenticação com código temporário.
-- Integração com um banco de dados operacional atualizado.
-- Recuperação semântica com embeddings e avaliação de relevância.
-- Testes de qualidade das respostas com casos de referência.
-- Observabilidade estruturada das chamadas de ferramentas.
-- Cache de consultas frequentes.
-- Persistência de sessões e histórico.
-- Implantação em ambiente com recursos adequados para inferência.
+No terminal, use `/limpar` para reiniciar a conversa e `/sair` para encerrar.
 
 ## Exemplos de interação
 
-A pasta `examples/` contém conversas de demonstração que ilustram diferentes comportamentos do agente.
+A pasta [`examples/`](examples/) reúne conversas registradas durante a execução da aplicação:
 
-Os exemplos devem ser registrados a partir de execuções reais da aplicação, especialmente nos cenários de consulta ao catálogo, pedidos, aplicação das políticas e situações fora do escopo.
+| Exemplo | Cenário demonstrado |
+|---|---|
+| [`01_catalogo.md`](examples/01_catalogo.md) | Pesquisa de violões com limite de preço e seleção de produto |
+| [`02_devolucao.md`](examples/02_devolucao.md) | Aplicação das regras de devolução do manual |
+| [`03_pedido.md`](examples/03_pedido.md) | Consulta de um pedido e conferência dos dados informados |
+| [`04_fora_escopo.md`](examples/04_fora_escopo.md) | Limites do catálogo e tratamento de políticas não documentadas |
 
-## Uso de assistentes de IA no desenvolvimento
+Os exemplos representam o comportamento do protótipo sobre a base fornecida, sem comunicação com serviços externos de venda ou logística.
 
-Utilizei o ChatGPT como apoio durante o planejamento, implementação e revisão do projeto.
+## Testes
 
-O assistente foi utilizado para discutir decisões arquiteturais, estruturar módulos Python, propor testes, identificar erros e apoiar a documentação.
+Execute a suíte automatizada na raiz do projeto:
 
-As implementações foram integradas e testadas no ambiente local utilizando VS Code, GitHub Desktop, Pytest e Ollama.
+```bash
+python -m pytest tests/ -v
+```
 
-O ChatGPT não é o modelo utilizado para o atendimento ao cliente: essa função é realizada localmente pelo Qwen 2.5 por meio do Ollama.
+Os testes cobrem filtros de produtos, descontos, seleção de itens, consultas de pedidos, recuperação do manual, validação de argumentos e orquestração de ferramentas. Os testes do agente simulam as respostas do cliente Ollama, permitindo verificar a lógica sem exigir uma inferência real a cada execução.
 
-## Contexto
+A validação manual na interface é complementar, pois o comportamento do modelo de linguagem pode variar entre execuções.
 
-Projeto desenvolvido exclusivamente para a etapa técnica do processo seletivo de AI Engineer da Artefact.
+## Segurança, escopo e limitações
 
-A Empório da Música é uma empresa fictícia criada para o cenário do desafio.
+- **Dados estáticos:** o catálogo e os pedidos refletem os CSVs fornecidos, sem sincronização em tempo real.
+- **Autenticação:** a conferência por número de pedido e e-mail é apenas uma verificação demonstrativa; não substitui autenticação segura em produção.
+- **Rastreamento:** códigos e previsões são registros históricos, não informações confirmadas pela transportadora.
+- **Precisão do LLM:** o modelo pode interpretar incorretamente solicitações ou argumentos; algumas entradas são verificadas pelo código Python.
+- **Recuperação documental:** a busca lexical não equivale a uma busca semântica completa e pode falhar em perguntas ambíguas.
+- **Desempenho:** o Qwen 2.5 3B pode apresentar latência perceptível quando executado somente em CPU.
+- **Histórico:** as mensagens são armazenadas apenas em memória durante a sessão, sem persistência após seu encerramento.
+- **Operações:** o protótipo não realiza compras, pagamentos, alterações de pedido ou comunicação direta com a transportadora.
+
+Os dados e as regras são destinados **exclusivamente à demonstração técnica**. Para uso real, seriam necessários autenticação, controles de acesso, monitoramento, integração com sistemas operacionais e avaliação contínua das respostas.
+
+## Possíveis evoluções
+
+- Recuperação semântica com embeddings e avaliação de relevância.
+- Autenticação do cliente com código temporário ou integração a uma identidade verificada.
+- Integração com catálogo e gestão de pedidos atualizados.
+- Persistência opcional de conversas e métricas de atendimento.
+- Testes de qualidade de resposta com cenários e respostas esperadas.
+- Logs estruturados, métricas de latência e rastreamento de chamadas de ferramentas.
+- Implantação em infraestrutura apropriada para inferência local ou remota.
+
+---
+
+**Empório da Música AI** — Projeto demonstrativo desenvolvido para o desafio técnico de AI Engineer da Artefact.
