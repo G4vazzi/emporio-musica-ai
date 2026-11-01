@@ -25,7 +25,14 @@ def main():
             print("\nAtendimento encerrado.")
             break
 
-        if mensagem.lower() == "/sair":
+        if mensagem.casefold() in {
+            "/sair",
+            "/bye",
+            "sair",
+            "sair para encerrar",
+            "exit",
+            "quit",
+        }:
             print("Atendimento encerrado.")
             break
 

@@ -4,7 +4,9 @@
 import json
 import os
 import sqlite3
+import time
 from pathlib import Path
+
 
 import httpx
 from dotenv import load_dotenv
@@ -152,11 +154,13 @@ def executar_ferramenta(nome: str, argumentos: dict) -> dict:
         }
 
 
+
 class AtendenteIA:
 
     def __init__(self, client=None):
+
         self.modelo = os.getenv(
-            "OLLAMA_MODEL", "qwen2.5:7b"
+            "OLLAMA_MODEL", "qwen2.5:3b"
         )
 
         self.max_historico = max(
@@ -166,29 +170,54 @@ class AtendenteIA:
 
         self.historico = []
 
-        self.client = client or Client(
+        self.client = client if client is not None else Client(
             host=os.getenv(
-                "OLLAMA_HOST", "http://127.0.0.1:11434"
+                "OLLAMA_HOST",
+                "http://127.0.0.1:11434"
             ),
-            timeout=120.0,
+            timeout=240.0,
         )
 
     def limpar_historico(self):
         self.historico.clear()
 
     def _chamar_modelo(self, mensagens, ferramentas):
-        return self.client.chat(
-            model=self.modelo,
-            messages=mensagens,
-            tools=ferramentas,
-            stream=False,
-            options={
-                "temperature": 0.2,
-                "num_ctx": 8192,
-            },
+
+        from time import perf_counter
+
+        inicio = perf_counter()
+
+        print(
+            "\n[IA] Processando solicitação...",
+            flush=True
         )
 
+        try:
+            resposta = self.client.chat(
+                model=self.modelo,
+                messages=mensagens,
+                tools=ferramentas,
+                stream=False,
+                keep_alive="10m",
+                options={
+                    "temperature": 0.2,
+                    "num_ctx": 4096,
+                    "num_predict": 256,
+                },
+            )
+
+            return resposta
+
+        finally:
+            duracao = perf_counter() - inicio
+
+            print(
+                f"[IA] Tempo da chamada: {duracao:.2f}s",
+                flush=True
+            )
+
     def _finalizar(self, pergunta, resposta):
+
         resposta = (resposta or "").strip()
 
         if not resposta:
@@ -198,8 +227,14 @@ class AtendenteIA:
             )
 
         self.historico.extend([
-            {"role": "user", "content": pergunta},
-            {"role": "assistant", "content": resposta},
+            {
+                "role": "user",
+                "content": pergunta,
+            },
+            {
+                "role": "assistant",
+                "content": resposta,
+            },
         ])
 
         self.historico = self.historico[
@@ -228,8 +263,12 @@ class AtendenteIA:
         ]
 
         try:
-            # No máximo quatro rodadas de consultas.
-            for _ in range(4):
+            # Limita a quatro rodadas de ferramentas
+            for rodada in range(4):
+
+                print(
+                    f"\n[Agente] Rodada {rodada + 1}/4"
+                )
 
                 resposta = self._chamar_modelo(
                     mensagens,
@@ -244,8 +283,6 @@ class AtendenteIA:
                         resposta.message.content,
                     )
 
-                # Guarda a chamada antes de devolver
-                # os resultados das ferramentas.
                 mensagens.append(resposta.message)
 
                 for chamada in chamadas:
@@ -253,18 +290,20 @@ class AtendenteIA:
                     nome = chamada.function.name
                     argumentos = chamada.function.arguments
 
-                    # Compatível com argumentos em JSON
-                    # ou dicionário Python.
                     if isinstance(argumentos, str):
                         try:
                             argumentos = json.loads(argumentos)
                         except json.JSONDecodeError:
                             argumentos = {}
 
-                    print(f"[Ferramenta] {nome}")
+                    print(
+                        f"[Ferramenta] {nome}",
+                        flush=True
+                    )
 
                     resultado = executar_ferramenta(
-                        nome, argumentos
+                        nome,
+                        argumentos,
                     )
 
                     mensagens.append({
@@ -277,10 +316,14 @@ class AtendenteIA:
                         ),
                     })
 
-            # Após quatro rodadas, pede uma resposta
-            # final sem disponibilizar novas ferramentas.
+            print(
+                "[Agente] Limite de ferramentas atingido."
+            )
+
+            # Resposta final sem novas chamadas
             resposta = self._chamar_modelo(
-                mensagens, []
+                mensagens,
+                [],
             )
 
             return self._finalizar(
@@ -292,23 +335,27 @@ class AtendenteIA:
 
             if erro.status_code == 404:
                 return (
-                    f"O modelo {self.modelo} não foi encontrado. "
+                    f"Modelo {self.modelo} não encontrado. "
                     f"Execute: ollama pull {self.modelo}"
                 )
 
+            print(
+                f"[Erro Ollama] HTTP {erro.status_code}"
+            )
+
             return (
-                f"Erro no Ollama (HTTP {erro.status_code}). "
-                "Confira o terminal e a configuração do modelo."
+                "O Ollama não conseguiu processar "
+                "sua solicitação."
             )
 
         except httpx.ConnectError:
             return (
                 "Não consegui conectar ao Ollama. "
-                "Verifique se ele está iniciado no Windows."
+                "Verifique se está iniciado."
             )
 
         except httpx.TimeoutException:
             return (
                 "O modelo demorou demais para responder. "
-                "Tente uma pergunta mais simples."
+                "Verifique o desempenho do computador."
             )
