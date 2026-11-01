@@ -62,6 +62,39 @@ with st.sidebar:
         st.session_state.mensagens = []
         st.rerun()
 
+    conteudo_exportacao = (
+        "# Empório da Música AI\n\n"
+        "## Registro de antendimento\n\n"
+    )
+
+    for mensagem in st.session_state.mensagens:
+
+        papel= (
+            "Cliente"
+            if mensagem["role"] == "user"
+            else "Atendente"
+        )
+
+        conteudo_exportacao += (
+            f"### {papel}\n\n"
+            f"{mensagem['content']}\n\n"
+        )
+
+    st.download_button(
+        label="Baixar conversa (.md)",
+        data=conteudo_exportacao,
+        file_name="conversa_emporio.md",
+        mime="text/markdown",
+        use_container_width=True,
+        disabled=not st.session_state.mensagens,
+    )
+
+    st.caption(
+        "Antes de publicar, revise e remova"
+        " informações pessoais ou sensíveis"
+        "das conversas."
+    )
+
     st.divider()
 
     st.info(
