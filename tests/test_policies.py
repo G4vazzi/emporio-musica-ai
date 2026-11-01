@@ -111,3 +111,20 @@ def test_manual_inexistente(
         consultar_politicas(
             "Qual é o horário da loja?"
         )
+
+
+def test_cancelamento_nao_documentado():
+    resultado = consultar_politicas(
+        "Posso cancelar meu pedido?"
+    )
+
+    assert resultado["encontrado"] is False
+    assert resultado["resultados"] == []
+
+
+def test_prazo_de_cancelamento_nao_documentado():
+    resultado = consultar_politicas(
+        "Qual é o prazo de cancelamento de pedidos?"
+    )
+
+    assert resultado["encontrado"] is False

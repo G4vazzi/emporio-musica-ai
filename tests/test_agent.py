@@ -167,3 +167,87 @@ def test_nao_confundir_viola_com_violao():
     )
 
     assert resultado["categoria"] == "viola"
+
+
+def test_politica_nao_encontrada_sem_alucinacao(monkeypatch):
+    monkeypatch.setitem(
+        FERRAMENTAS,
+        "consultar_politicas",
+        lambda **kwargs: {
+            "encontrado": False,
+            "resultados": [],
+        },
+    )
+
+    chamada = SimpleNamespace(
+        function=SimpleNamespace(
+            name="consultar_politicas",
+            arguments={"pergunta": "Posso cancelar?"},
+        )
+    )
+
+    cliente = ClienteFalso([
+        resposta_falsa(ferramentas=[chamada]),
+    ])
+
+    agente = AtendenteIA(client=cliente)
+
+    texto = agente.responder(
+        "Posso cancelar meu pedido?"
+    )
+
+    assert "não encontrei" in texto.lower()
+    assert "manual" in texto.lower()
+
+    # Não realiza outra chamada desnecessária ao LLM
+    assert len(cliente.chamadas) == 1
+
+
+def test_retorno_documental_uma_so_mensagem(monkeypatch):
+    monkeypatch.setitem(
+        FERRAMENTAS,
+        "consultar_politicas",
+        lambda **kwargs: {
+            "encontrado": True,
+            "resultados": [
+                {
+                    "secao": "2 Horários",
+                    "trecho": "Sábado das 9 às 13",
+                }
+            ],
+        },
+    )
+
+    chamada = SimpleNamespace(
+        function=SimpleNamespace(
+            name="consultar_politicas",
+            arguments={"pergunta": "Horário de sábado"},
+        )
+    )
+
+    primeira = resposta_falsa(
+        ferramentas=[chamada]
+    )
+
+    cliente = ClienteFalso([
+        primeira,
+        resposta_falsa(
+            "A loja funciona até as 13h aos sábados."
+        ),
+    ])
+
+    agente = AtendenteIA(client=cliente)
+
+    texto = agente.responder(
+        "Qual é o horário de sábado?"
+    )
+
+    assert "13h" in texto
+
+    mensagens = cliente.chamadas[1]["messages"]
+
+    # A mensagem que chamou a ferramenta não se repete
+    assert sum(
+        m is primeira.message
+        for m in mensagens
+    ) == 1

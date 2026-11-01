@@ -461,9 +461,6 @@ class AtendenteIA:
                         resposta.message.content,
                     )
 
-                mensagens.append(resposta.message)
-
-                
                 # Registra a resposta que solicitou ferramentas
                 mensagens.append(resposta.message)
 
@@ -515,6 +512,19 @@ class AtendenteIA:
                                 mensagem,
                                 formatar_lista_produtos(resultado)
                             )
+
+                    if (
+                        nome == "consultar_politicas"
+                        and isinstance(resultado, dict)
+                        and resultado.get("encontrado") is False
+                        and len(chamadas) == 1
+                    ):
+                        return self._finalizar(
+                            mensagem,
+                            "Não encontrei uma regra específica para isso "
+                            "no manual da loja. Para confirmar o procedimento, "
+                            "recomendo falar com a equipe de atendimento."
+                        )
 
                     # Outras consultas: envia o resultado ao LLM
                     mensagens.append({

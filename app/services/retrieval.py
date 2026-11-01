@@ -19,6 +19,7 @@ STOPWORDS = {
     "tem", "um", "uma", "voces",
     "loja", "empresa", "sobre",
     "estou", "queria", "quero", "mais",
+    "pedido", "pedidos", "cliente", "clientes"
 }
 
 # Grupos de sinônimos usados nas pesquisas
@@ -229,6 +230,23 @@ def recuperar_secoes(
         str(caminho),
         caminho.stat().st_mtime_ns
     )
+
+    if any(
+        termo.startswith("cancel")
+        for termo in _tokens(pergunta)
+    ):
+        ha_regra = any(
+            any(
+                termo.startswith("cancel")
+                for termo in _tokens(
+                    secao["titulo"] + " " + secao["texto"]
+                )
+            )
+            for secao in secoes
+        )
+
+        if not ha_regra:
+            return []
 
     resultados = []
 

@@ -50,4 +50,8 @@ REGRAS DE CONTINUIDADE DA CONVERSA:
 - Ao listar instrumentos, mantenha exatamente a ordem retornada
   por buscar_produtos, numerando de 1 a 5.
   Nunca altere a ordem, os nomes ou os preços.
+- Se consultar_politicas retornar encontrado=false, não atribua
+  ao manual regras de cancelamento ou outras regras não documentadas.
+  Diga que o procedimento deve ser confirmado com o atendimento humano.
+
 """.strip()
