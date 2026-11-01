@@ -1,0 +1,65 @@
+
+# ==============================
+# PYTHON
+# ==============================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+build/
+dist/
+
+# ==============================
+# AMBIENTE VIRTUAL
+# ==============================
+.venv/
+venv/
+env/
+
+# ==============================
+# VARIAVEIS DE AMBIENTE
+# ==============================
+.env
+.env.*
+!.env.example
+
+# ==============================
+# BANCO DE DADOS LOCAL
+# ==============================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ==============================
+# TESTES E COBERTURA
+# ==============================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# ==============================
+# STREAMLIT
+# ==============================
+.streamlit/secrets.toml
+
+# ==============================
+# EDITORES
+# ==============================
+.vscode/
+.idea/
+
+# ==============================
+# LOGS E ARQUIVOS TEMPORARIOS
+# ==============================
+*.log
+*.tmp
+*.bak
+.cache/
+.DS_Store
+Thumbs.db
