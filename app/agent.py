@@ -15,6 +15,11 @@ from dotenv import load_dotenv
 from ollama import Client, ResponseError
 
 from app.prompts import INSTRUCOES_SISTEMA
+from app.guardrails import (
+    fonte_obrigatoria,
+    resposta_politica_documentada,
+    consultar_lista_categorias,
+)
 from app.tools.products import buscar_produtos, consultar_produto
 from app.tools.orders import consultar_pedido
 from app.tools.policies import consultar_politicas
@@ -427,8 +432,24 @@ class AtendenteIA:
                 "\n".join(linhas)
             )
 
+        
+        # Consulta separadamente instrumentos mencionados
+        # na mesma pergunta.
+        resposta_lista = consultar_lista_categorias(
+            mensagem,
+            executar_ferramenta
+        )
 
-        mensagens = [
+        if resposta_lista is not None:
+            return self._finalizar(
+                mensagem,
+                resposta_lista
+            )
+
+
+
+        mensagens    = [
+
             {
                 "role": "system",
                 "content": INSTRUCOES_SISTEMA,
@@ -441,6 +462,9 @@ class AtendenteIA:
         ]
 
         try:
+
+            fontes_consultadas = set()
+            nova_tentativa = False
             # Limita a quatro rodadas de ferramentas
             for rodada in range(4):
 
@@ -455,11 +479,71 @@ class AtendenteIA:
 
                 chamadas = resposta.message.tool_calls or []
 
+                
                 if not chamadas:
+                    fonte = fonte_obrigatoria(mensagem)
+
+                    # Consulta obrigatória ao PDF
+                    if (
+                        fonte == "consultar_politicas"
+                        and fonte not in fontes_consultadas
+                    ):
+                        print(
+                            "[Ferramenta] consultar_politicas "
+                            "(verificação obrigatória)"
+                        )
+
+                        resultado = executar_ferramenta(
+                            "consultar_politicas",
+                            {"pergunta": mensagem}
+                        )
+
+                        return self._finalizar(
+                            mensagem,
+                            resposta_politica_documentada(
+                                mensagem,
+                                resultado
+                            )
+                        )
+
+                    # Exige uma consulta real ao catálogo
+                    if (
+                        fonte == "buscar_produtos"
+                        and not fontes_consultadas.intersection(
+                            {
+                                "buscar_produtos",
+                                "consultar_produto"
+                            }
+                        )
+                    ):
+                        if not nova_tentativa:
+                            nova_tentativa = True
+
+                            mensagens.append({
+                                "role": "system",
+                                "content": (
+                                    "Para responder à pergunta atual, "
+                                    "chame buscar_produtos ou "
+                                    "consultar_produto. Não afirme "
+                                    "disponibilidade, estoque ou preço "
+                                    "sem consultar o catálogo."
+                                ),
+                            })
+
+                            continue
+
+                        return self._finalizar(
+                            mensagem,
+                            "Não consegui verificar isso "
+                            "no catálogo agora. "
+                            "Pode reformular a pergunta?"
+                        )
+
                     return self._finalizar(
                         mensagem,
-                        resposta.message.content,
+                        resposta.message.content
                     )
+
 
                 # Registra a resposta que solicitou ferramentas
                 mensagens.append(resposta.message)
@@ -479,6 +563,38 @@ class AtendenteIA:
                     if not isinstance(argumentos, dict):
                         argumentos = {}
 
+                    
+                    # Cancelamento é assunto de política.
+                    # Não solicitar dados do pedido para
+                    # inventar um procedimento inexistente.
+                    if (
+                        nome == "consultar_pedido"
+                        and fonte_obrigatoria(mensagem)
+                        == "consultar_politicas"
+                    ):
+                        documento = executar_ferramenta(
+                            "consultar_politicas",
+                            {"pergunta": mensagem}
+                        )
+
+                        return self._finalizar(
+                            mensagem,
+                            resposta_politica_documentada(
+                                mensagem,
+                                documento
+                            )
+                        )
+
+                    # Mantém a pergunta original quando
+                    # ela claramente solicita uma política.
+                    if (
+                        nome == "consultar_politicas"
+                        and fonte_obrigatoria(mensagem)
+                        == "consultar_politicas"
+                    ):
+                        argumentos["pergunta"] = mensagem
+
+
                     # Valida os filtros de produtos
                     if nome == "buscar_produtos":
                         argumentos = ajustar_filtros_produtos(
@@ -496,6 +612,34 @@ class AtendenteIA:
                         nome,
                         argumentos
                     )
+
+                    
+                    if (
+                        isinstance(resultado, dict)
+                        and "erro" not in resultado
+                    ):
+                        fontes_consultadas.add(nome)
+
+                    # Para arrependimento online,
+                    # responde com a seção documental 4.1.
+                    if (
+                        nome == "consultar_politicas"
+                        and fonte_obrigatoria(mensagem)
+                        == "consultar_politicas"
+                        and (
+                            "arrepend" in mensagem.casefold()
+                            or "devolver" in mensagem.casefold()
+                        )
+                        and len(chamadas) == 1
+                    ):
+                        return self._finalizar(
+                            mensagem,
+                            resposta_politica_documentada(
+                                mensagem,
+                                resultado
+                            )
+                        )
+
 
                     # Busca simples: resposta direta pelo Python
                     if (

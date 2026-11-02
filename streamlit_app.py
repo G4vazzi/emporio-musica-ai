@@ -64,7 +64,7 @@ with st.sidebar:
 
     conteudo_exportacao = (
         "# Empório da Música AI\n\n"
-        "## Registro de antendimento\n\n"
+        "## Registro de atendimento\n\n"
     )
 
     for mensagem in st.session_state.mensagens:
