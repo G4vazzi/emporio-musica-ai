@@ -1,6 +1,6 @@
 # Empório da Música AI
 
-## Registro de antendimento
+## Registro de atendimento
 
 ### Cliente
 
@@ -8,13 +8,15 @@ Vocês vendem amplificadores e pedais?
 
 ### Atendente
 
-Sim, a Empório da Música vende amplificadores e pedais. Você gostaria de ver alguns produtos específicos ou gostaria de uma sugestão de categoria?
+Conferi os itens separadamente no catálogo:
+
+- **Amplificadores**: não encontrei itens disponíveis na base atual.
+- **Pedais**: não encontrei itens disponíveis na base atual.
 
 ### Cliente
 
-Posso cancelar meu pedido
+Posso cancelar meu pedido?
 
 ### Atendente
 
-Para cancelar seu pedido, precisamos primeiro confirmar o número do pedido e o seu e-mail cadastrado. Poderia fornecer esses detalhes, por favor?
-
+Não encontrei uma regra específica para isso no manual da loja. Recomendo confirmar o procedimento com a equipe de atendimento.

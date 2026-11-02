@@ -1,6 +1,6 @@
 # Empório da Música AI
 
-## Registro de antendimento
+## Registro de atendimento
 
 ### Cliente
 
@@ -8,18 +8,8 @@ Comprei um violão pela internet e me arrependi. Posso devolver?
 
 ### Atendente
 
-Infelizmente, não posso confirmar diretamente se você pode devolver o seu violão sem mais informações. Para garantir que sua solicitação de devolução será processada conforme o esperado, é melhor que você entre em contato diretamente com a loja. Você pode consultar as políticas de troca e devolução através da ferramenta de consulta de políticas. Você gostaria de fazer essa consulta agora?
+Segundo o manual, **seção 4.1 Direito de Arrependimento (Compras Online) (página 4)**:
 
-### Cliente
+• O cliente pode solicitar a devolução em até 7 (sete) dias corridos após o recebimento do produto, sem necessidade de justificativa. • O produto deve estar em sua embalagem original, sem sinais de uso, com todos os acessórios e manuais. • O reembolso será realizado na mesma forma de pagamento original em até 10 dias úteis. • O frete de devolução é por conta da loja em caso de arrependimento.
 
-SIm gostaria
-
-### Atendente
-
-Baseado nos termos de troca e devolução encontrados no nosso manual, você pode fazer uma troca por preferência do seu violão, desde que esteja em perfeito estado e na embalagem original. As condições são as seguintes:
-
-- Trocas por preferência (cor, modelo, tamanho) são permitidas em até 7 dias, desde que o produto esteja em perfeito estado e na embalagem original.
-- Diferenças de valor serão cobradas ou reembolsadas conforme o caso.
-
-Para confirmar essa informação e realizar a troca, é recomendado que você entre em contato diretamente com a loja. Você pode entrar em contato com a equipe de atendimento para resolver essa questão de maneira eficaz.
-
+Se precisar solicitar o procedimento, entre em contato com a loja.
