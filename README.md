@@ -1,38 +1,38 @@
 # 🎸 Empório da Música AI
 
-**Assistente virtual de atendimento para uma loja fictícia de instrumentos musicais**, desenvolvido em Python como solução para o desafio técnico de **AI Engineer da Artefact**.
+**An AI-powered customer service assistant for a fictional musical instrument store**, developed in Python as a solution to Artefact's **AI Engineer technical challenge**.
 
-O agente conversa em português, identifica quando precisa consultar dados da operação e quando precisa buscar regras do manual da loja. A aplicação utiliza um modelo de linguagem executado localmente com **Ollama**, ferramentas Python, um banco **SQLite** e uma interface web em **Streamlit**.
+The agent communicates in **Brazilian Portuguese** and determines when to query operational data or retrieve rules from the store's policy manual. The application combines a locally hosted language model through **Ollama**, Python tools, a **SQLite** database, and a **Streamlit** web interface.
 
-> **Escopo:** protótipo demonstrativo com dados fornecidos para o desafio. Preços, estoque, pedidos e rastreamentos são informações de uma base estática, não de sistemas comerciais em tempo real.
+> **Scope:** This is a demonstration prototype using the datasets provided for the challenge. Prices, stock levels, orders, and tracking information come from a static dataset, not live retail systems.
 
-## Funcionalidades
+## Features
 
-- **Catálogo:** pesquisa por nome, categoria, disponibilidade e faixa de preço.
-- **Detalhes de produtos:** descrição, especificações, preço e estoque registrados.
-- **Promoções:** aplicação das condições de desconto registradas na base de dados.
-- **Consulta de pedidos:** busca por número do pedido e e-mail cadastrado, com status e informações históricas.
-- **Políticas da loja:** recuperação de trechos do manual em PDF para dúvidas sobre trocas, devoluções, pagamentos e funcionamento.
-- **Conversa contextual:** mantém o histórico da sessão e permite selecionar um produto de uma lista pelo número.
-- **Respostas responsáveis:** procura não inventar dados nem apresentar uma política não documentada como regra confirmada.
-- **Duas interfaces:** chat web com Streamlit e atendimento via terminal.
+- **Product catalog:** Search by name, category, availability, and price range.
+- **Product details:** Retrieve recorded descriptions, specifications, prices, and stock levels.
+- **Promotions:** Apply discount rules recorded in the database.
+- **Order lookup:** Search by order number and registered email address, including historical status and order information.
+- **Store policies:** Retrieve relevant passages from a PDF manual to answer questions about exchanges, returns, payments, and business hours.
+- **Context-aware conversations:** Maintain session history and let customers select an item from a product list by number.
+- **Responsible responses:** Aim to avoid fabricated data or presenting undocumented policies as confirmed rules.
+- **Two interfaces:** A Streamlit web chat and a command-line interface.
 
-## Arquitetura
+## Architecture
 
-A solução adota uma **arquitetura híbrida de Function Calling e recuperação lexical de documentos**.
+The solution uses a **hybrid architecture combining Function Calling with lexical document retrieval**.
 
 ```text
                          ┌──────────────────────┐
-                         │      Cliente         │
+                         │       Customer       │
                          └──────────┬───────────┘
                                     │
                          ┌──────────▼───────────┐
-                         │  Streamlit ou CLI    │
+                         │  Streamlit or CLI    │
                          └──────────┬───────────┘
                                     │
                          ┌──────────▼───────────┐
                          │     AtendenteIA      │
-                         │  Histórico + Prompt  │
+                         │  History + Prompt    │
                          └──────────┬───────────┘
                                     │
                          ┌──────────▼───────────┐
@@ -40,97 +40,97 @@ A solução adota uma **arquitetura híbrida de Function Calling e recuperação
                          │       Ollama         │
                          └──────────┬───────────┘
                                     │
-                         Seleção de ferramenta
+                              Tool selection
                                     │
                ┌────────────────────┼────────────────────┐
                │                    │                    │
         ┌──────▼───────┐     ┌──────▼───────┐    ┌──────▼──────────┐
-        │  Produtos e  │     │   Pedidos    │    │    Políticas    │
-        │  promoções   │     │              │    │                 │
-        │    SQLite    │     │    SQLite    │    │ PDF / PyMuPDF   │
+        │ Products and │     │   Orders     │    │ Store policies  │
+        │ promotions   │     │              │    │                 │
+        │   SQLite     │     │   SQLite     │    │ PDF / PyMuPDF   │
         └──────┬───────┘     └──────┬───────┘    └──────┬──────────┘
                └────────────────────┼───────────────────┘
                                     │
                          ┌──────────▼───────────┐
-                         │  Resposta ao cliente │
+                         │  Customer response   │
                          └──────────────────────┘
 ```
 
-### Ferramentas disponíveis
+### Available tools
 
-| Ferramenta | Objetivo | Fonte |
+| Tool | Purpose | Data source |
 |---|---|---|
-| `buscar_produtos` | Pesquisar instrumentos e filtrar resultados | SQLite |
-| `consultar_produto` | Obter detalhes de um instrumento | SQLite |
-| `consultar_pedido` | Consultar o registro histórico de um pedido | SQLite |
-| `consultar_politicas` | Localizar seções pertinentes do manual | PDF |
+| `buscar_produtos` | Search for instruments and filter results | SQLite |
+| `consultar_produto` | Retrieve details about an instrument | SQLite |
+| `consultar_pedido` | Look up a historical order record | SQLite |
+| `consultar_politicas` | Find relevant sections of the store manual | PDF |
 
-O modelo **não executa SQL livremente**. Ele escolhe entre ferramentas previamente registradas; as consultas e os filtros são implementados em Python.
+The model **does not execute arbitrary SQL queries**. It selects from a predefined set of tools; database queries and filtering logic are implemented in Python.
 
-## Decisões técnicas
+## Technical Decisions
 
-### Modelo de linguagem: Ollama + Qwen 2.5 3B
+### Language model: Ollama + Qwen 2.5 3B
 
-Foi escolhido um modelo local para evitar custos de inferência por requisição e permitir a execução do protótipo sem depender de uma API comercial. O Qwen 2.5 3B realiza a interpretação da mensagem e a seleção das ferramentas.
+A local model was chosen to avoid per-request inference charges and allow the prototype to run without relying on a commercial API. Qwen 2.5 3B interprets customer messages and selects the appropriate tools.
 
-Essa escolha envolve um compromisso: modelos menores podem confundir categorias ou argumentos e apresentar latência elevada em máquinas sem GPU dedicada. Por isso, o código valida filtros de produtos e utiliza respostas formatadas diretamente em Python quando possível.
+This involves a trade-off: smaller models may confuse categories or tool arguments and may be slow on machines without a dedicated GPU. To mitigate these issues, the code validates product filters and uses responses formatted directly in Python whenever possible.
 
-### Function Calling em vez de respostas baseadas apenas no prompt
+### Function Calling instead of prompt-only responses
 
-Dados como preços, estoque, promoções e pedidos não são confiados à memória do modelo. Quando necessário, o agente invoca funções Python que consultam a base estruturada.
+Information such as prices, stock levels, promotions, and orders is not entrusted to the model's memory. When needed, the agent calls Python functions that query the structured dataset.
 
-Nas pesquisas simples de produtos, o Python formata a lista retornada, evitando uma segunda inferência do modelo. Isso reduz o tempo de resposta e preserva os valores encontrados.
+For straightforward product searches, Python formats the returned list without requiring a second model inference. This reduces response time and preserves the values retrieved from the database.
 
-### SQLite para dados estruturados
+### SQLite for structured data
 
-As seis tabelas CSV disponibilizadas são importadas para um banco relacional local. O SQLite permite relacionar clientes, pedidos, itens, produtos, categorias e promoções sem exigir um servidor separado.
+The six provided CSV files are imported into a local relational database. SQLite makes it possible to relate customers, orders, order items, products, categories, and promotions without running a separate database server.
 
-Os valores monetários são tratados em **centavos inteiros** na base, reduzindo problemas de precisão típicos de operações com ponto flutuante.
+Monetary amounts are stored as **integer cents** in the database, reducing the precision problems commonly associated with floating-point arithmetic.
 
-### Recuperação lexical do manual
+### Lexical retrieval from the policy manual
 
-O manual em PDF é processado com **PyMuPDF**. As seções são identificadas e classificadas conforme a correspondência entre os termos da pergunta e o conteúdo, com normalização de palavras e sinônimos.
+The PDF manual is processed using **PyMuPDF**. Its sections are identified and ranked according to matches between the customer's question and the document, with word normalization and synonyms.
 
-Não há embeddings ou banco vetorial nesta versão. Para um manual pequeno e organizado em seções, essa abordagem é simples e tem baixo custo de execução; em contrapartida, pode ter dificuldade com perguntas ambíguas ou formuladas com vocabulário muito diferente do documento.
+This version does not use embeddings or a vector database. For a small, clearly structured manual, lexical retrieval is simple and inexpensive to run. However, it may struggle with ambiguous questions or wording that differs significantly from the source document.
 
-### Prompt, histórico e tratamento de incertezas
+### Prompt, conversation history, and uncertainty handling
 
-O prompt de sistema orienta o agente a manter um tom de atendimento adequado à loja, utilizar as fontes disponíveis e evitar informações não confirmadas. O histórico é mantido em memória durante a sessão, com um limite configurável de mensagens.
+The system prompt instructs the agent to maintain an appropriate customer service tone, use available sources, and avoid unverified statements. Conversation history is kept in memory during the session, subject to a configurable message limit.
 
-Quando uma regra não está disponível ou existe ambiguidade documental, o comportamento esperado é informar a limitação e orientar o cliente a confirmar com a equipe da loja.
+When a policy is unavailable or the documentation is ambiguous, the expected behavior is to acknowledge the limitation and advise the customer to confirm the details with the store's support team.
 
-## Tecnologias
+## Technology Stack
 
-| Tecnologia | Aplicação |
+| Technology | Role |
 |---|---|
-| Python 3.12 | Linguagem principal |
-| Ollama | Execução local do modelo |
-| Qwen 2.5 3B | LLM com suporte a chamadas de ferramentas |
-| SQLite | Dados de produtos, clientes e pedidos |
-| PyMuPDF | Leitura e segmentação do manual PDF |
-| Streamlit | Interface de chat no navegador |
-| python-dotenv | Configurações locais |
-| Pytest | Testes automatizados |
+| Python 3.12 | Primary programming language |
+| Ollama | Local model execution |
+| Qwen 2.5 3B | Language model with tool-calling support |
+| SQLite | Product, customer, and order data |
+| PyMuPDF | PDF reading and section extraction |
+| Streamlit | Browser-based chat interface |
+| python-dotenv | Local environment configuration |
+| Pytest | Automated testing |
 
-## Estrutura do projeto
+## Project Structure
 
 ```text
 emporio-musica-ai/
 ├── .streamlit/
 │   └── config.toml
 ├── app/
-│   ├── agent.py                  # Orquestração do agente e ferramentas
-│   ├── prompts.py                # Instruções do atendente
-│   ├── main.py                   # Chat via terminal
+│   ├── agent.py                  # Agent and tool orchestration
+│   ├── prompts.py                # Customer service instructions
+│   ├── main.py                   # Terminal chat
 │   ├── database/
-│   │   ├── connection.py         # Conexão SQLite
-│   │   └── import_data.py        # Criação e importação das tabelas
+│   │   ├── connection.py         # SQLite connection
+│   │   └── import_data.py        # Table creation and CSV import
 │   ├── services/
-│   │   └── retrieval.py          # Recuperação de seções do PDF
+│   │   └── retrieval.py          # PDF section retrieval
 │   └── tools/
-│       ├── products.py           # Catálogo e detalhes dos produtos
-│       ├── orders.py             # Consulta de pedidos
-│       └── policies.py           # Consulta das políticas
+│       ├── products.py           # Product catalog and details
+│       ├── orders.py             # Order lookups
+│       └── policies.py           # Store policy lookups
 ├── data/
 │   ├── categories.csv
 │   ├── customers.csv
@@ -139,72 +139,72 @@ emporio-musica-ai/
 │   ├── order_items.csv
 │   ├── promotions.csv
 │   └── politicas_da_loja.pdf
-├── tests/                         # Testes com Pytest
-├── examples/                      # Conversas reais de demonstração
-├── streamlit_app.py               # Interface web
+├── tests/                         # Pytest test suite
+├── examples/                      # Recorded demonstration conversations
+├── streamlit_app.py               # Web interface
 ├── requirements.txt
 ├── .env.example
 └── README.md
 ```
 
-O arquivo `data/emporio_musica.db` é criado localmente na etapa de importação e não precisa ser versionado.
+The `data/emporio_musica.db` file is created locally during the import step and does not need to be committed to version control.
 
-## Instalação e execução
+## Installation and Usage
 
-### Pré-requisitos
+### Prerequisites
 
-- **Python 3.12** instalado.
-- **Ollama** instalado e em execução.
-- Terminal PowerShell, Bash ou equivalente.
-- Acesso aos CSVs e ao PDF incluídos em `data/`.
+- **Python 3.12** installed.
+- **Ollama** installed and running.
+- PowerShell, Bash, or an equivalent terminal.
+- The CSV files and PDF included in `data/`.
 
-### 1. Baixar e configurar o Ollama
+### 1. Install and configure Ollama
 
-Instale o Ollama: <https://ollama.com/download>
+Install Ollama: <https://ollama.com/download>
 
-Baixe o modelo utilizado:
+Download the model used by this project:
 
 ```bash
 ollama pull qwen2.5:3b
 ```
 
-Confira se o modelo está disponível:
+Check that the model is available:
 
 ```bash
 ollama list
 ```
 
-O serviço Ollama precisa estar em execução para o agente responder.
+The Ollama service must be running for the agent to respond.
 
-### 2. Preparar o ambiente Python
+### 2. Set up the Python environment
 
-Na raiz do projeto, crie um ambiente virtual:
+From the project root, create a virtual environment:
 
 ```bash
 python -m venv .venv
 ```
 
-Ative-o no **Windows (PowerShell)**:
+Activate it on **Windows (PowerShell)**:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-Ou no **Linux/macOS**:
+Or on **Linux/macOS**:
 
 ```bash
 source .venv/bin/activate
 ```
 
-Instale as dependências:
+Install the dependencies:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-### 3. Configurar as variáveis de ambiente
+### 3. Configure environment variables
 
-Copie `.env.example` para `.env` e confira os parâmetros:
+Copy `.env.example` to `.env` and review the settings:
 
 ```dotenv
 LLM_PROVIDER=ollama
@@ -215,19 +215,19 @@ POLICIES_PATH=data/politicas_da_loja.pdf
 MAX_HISTORY_MESSAGES=12
 ```
 
-O arquivo `.env` contém configurações locais e não deve ser enviado ao repositório.
+The `.env` file contains local configuration and should not be committed to the repository.
 
-### 4. Criar o banco de dados
+### 4. Initialize the database
 
-Com o terminal aberto na raiz do projeto:
+Run this command from the project root:
 
 ```bash
 python -m app.database.import_data
 ```
 
-O comando cria as tabelas do SQLite e importa os seis CSVs:
+The command creates the SQLite tables and imports all six CSV files:
 
-| Tabela | Registros de exemplo |
+| Table | Sample records |
 |---|---:|
 | `categories` | 9 |
 | `customers` | 50 |
@@ -236,74 +236,74 @@ O comando cria as tabelas do SQLite e importa os seis CSVs:
 | `order_items` | 22 |
 | `promotions` | 25 |
 
-> **Atenção:** repetir a importação recria os registros a partir dos CSVs. Alterações locais feitas diretamente nessas tabelas podem ser perdidas.
+> **Important:** Running the import again recreates the records from the CSV files. Local changes made directly to these tables may be lost.
 
-### 5. Iniciar o atendimento
+### 5. Start the assistant
 
-**Interface web (recomendada):**
+**Web interface (recommended):**
 
 ```bash
 python -m streamlit run streamlit_app.py
 ```
 
-Acesse <http://localhost:8501> no navegador. A interface possui histórico da sessão, perguntas sugeridas, opção de iniciar uma conversa e exportação do atendimento em Markdown.
+Open <http://localhost:8501> in your browser. The interface provides session history, suggested questions, an option to start a new conversation, and the ability to export chat transcripts as Markdown.
 
-**Interface de terminal:**
+**Command-line interface:**
 
 ```bash
 python -m app.main
 ```
 
-No terminal, use `/limpar` para reiniciar a conversa e `/sair` para encerrar.
+In the terminal, use `/limpar` to reset the conversation and `/sair` to exit. These command names remain in Portuguese because they are part of the implemented CLI.
 
-## Exemplos de interação
+## Conversation Examples
 
-A pasta [`examples/`](examples/) reúne conversas registradas durante a execução da aplicação:
+The [`examples/`](examples/) folder contains conversations recorded while running the application:
 
-| Exemplo | Cenário demonstrado |
+| Example | Scenario |
 |---|---|
-| [`01_catalogo.md`](examples/01_catalogo.md) | Pesquisa de violões com limite de preço e seleção de produto |
-| [`02_devolucao.md`](examples/02_devolucao.md) | Aplicação das regras de devolução do manual |
-| [`03_pedido.md`](examples/03_pedido.md) | Consulta de um pedido e conferência dos dados informados |
-| [`04_fora_escopo.md`](examples/04_fora_escopo.md) | Limites do catálogo e tratamento de políticas não documentadas |
+| [`01_catalogo.md`](examples/01_catalogo.md) | Acoustic guitar search within a budget and product selection |
+| [`02_devolucao.md`](examples/02_devolucao.md) | Applying the manual's return policy |
+| [`03_pedido.md`](examples/03_pedido.md) | Order lookup and checking the information provided |
+| [`04_fora_escopo.md`](examples/04_fora_escopo.md) | Catalog limitations and handling undocumented policies |
 
-Os exemplos representam o comportamento do protótipo sobre a base fornecida, sem comunicação com serviços externos de venda ou logística.
+The examples illustrate the prototype's behavior with the provided dataset; there is no communication with live sales or shipping services.
 
-## Testes
+## Testing
 
-Execute a suíte automatizada na raiz do projeto:
+Run the automated test suite from the project root:
 
 ```bash
 python -m pytest tests/ -v
 ```
 
-Os testes cobrem filtros de produtos, descontos, seleção de itens, consultas de pedidos, recuperação do manual, validação de argumentos e orquestração de ferramentas. Os testes do agente simulam as respostas do cliente Ollama, permitindo verificar a lógica sem exigir uma inferência real a cada execução.
+Tests cover product filtering, discounts, item selection, order lookups, policy manual retrieval, argument validation, and tool orchestration. Agent tests simulate Ollama client responses, so the application logic can be tested without performing a real model inference on every run.
 
-A validação manual na interface é complementar, pois o comportamento do modelo de linguagem pode variar entre execuções.
+Manual testing through the interface is complementary, because the language model's behavior may vary between runs.
 
-## Segurança, escopo e limitações
+## Security, Scope, and Limitations
 
-- **Dados estáticos:** o catálogo e os pedidos refletem os CSVs fornecidos, sem sincronização em tempo real.
-- **Autenticação:** a conferência por número de pedido e e-mail é apenas uma verificação demonstrativa; não substitui autenticação segura em produção.
-- **Rastreamento:** códigos e previsões são registros históricos, não informações confirmadas pela transportadora.
-- **Precisão do LLM:** o modelo pode interpretar incorretamente solicitações ou argumentos; algumas entradas são verificadas pelo código Python.
-- **Recuperação documental:** a busca lexical não equivale a uma busca semântica completa e pode falhar em perguntas ambíguas.
-- **Desempenho:** o Qwen 2.5 3B pode apresentar latência perceptível quando executado somente em CPU.
-- **Histórico:** as mensagens são armazenadas apenas em memória durante a sessão, sem persistência após seu encerramento.
-- **Operações:** o protótipo não realiza compras, pagamentos, alterações de pedido ou comunicação direta com a transportadora.
+- **Static data:** The catalog and orders reflect the provided CSV files and are not updated in real time.
+- **Authentication:** Checking an order number and email address is only a demonstration-level verification method; it does not replace secure authentication in production.
+- **Shipment tracking:** Tracking codes and estimated dates are historical records, not live confirmations from a carrier.
+- **LLM accuracy:** The model may misinterpret requests or tool arguments; some inputs are validated in Python.
+- **Document retrieval:** Lexical search is not equivalent to full semantic search and may fail on ambiguous questions.
+- **Performance:** Qwen 2.5 3B may have noticeable latency when running on CPU only.
+- **Conversation history:** Messages are kept in memory during the session and are not persisted after the session ends.
+- **Operations:** The prototype cannot place orders, process payments, modify orders, or communicate directly with shipping carriers.
 
-Os dados e as regras são destinados **exclusivamente à demonstração técnica**. Para uso real, seriam necessários autenticação, controles de acesso, monitoramento, integração com sistemas operacionais e avaliação contínua das respostas.
+The data and rules are intended **exclusively for technical demonstration**. A production deployment would require authentication, access controls, monitoring, integration with operational systems, and ongoing evaluation of responses.
 
-## Possíveis evoluções
+## Potential Improvements
 
-- Recuperação semântica com embeddings e avaliação de relevância.
-- Autenticação do cliente com código temporário ou integração a uma identidade verificada.
-- Integração com catálogo e gestão de pedidos atualizados.
-- Persistência opcional de conversas e métricas de atendimento.
-- Testes de qualidade de resposta com cenários e respostas esperadas.
-- Logs estruturados, métricas de latência e rastreamento de chamadas de ferramentas.
-- Implantação em infraestrutura apropriada para inferência local ou remota.
+- Semantic retrieval using embeddings and relevance evaluation.
+- Customer authentication using one-time codes or integration with verified identities.
+- Integration with live inventory and order management systems.
+- Optional persistence of conversations and customer service metrics.
+- Response-quality tests using predefined scenarios and expected answers.
+- Structured logging, latency metrics, and tool-call tracing.
+- Deployment to infrastructure suited to local or remote inference.
 
 ---
 
-**Empório da Música AI** — Projeto demonstrativo desenvolvido para o desafio técnico de AI Engineer da Artefact.
+**Empório da Música AI** — A demonstration project developed for Artefact's AI Engineer technical challenge.
